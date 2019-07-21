@@ -1,0 +1,14 @@
+[package]
+name = "ruma-bot"
+version = "0.1.0"
+authors = ["Jonas Platte <jplatte+git@posteo.de>"]
+edition = "2018"
+
+[dependencies.ruma-bot-macro]
+path = "macro"
+
+[dev-dependencies.tokio]
+git = "https://github.com/tokio-rs/tokio"
+
+[workspace]
+members = ["macro"]
