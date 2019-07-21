@@ -7,5 +7,5 @@ async fn help() {}
 
 #[tokio::main]
 async fn main() {
-    let bot = BotBuilder::new().register(&help).build();
+    let bot = BotBuilder::new().register(help).build();
 }

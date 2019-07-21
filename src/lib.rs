@@ -10,17 +10,27 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use anymap::any::Any;
+type AnyMap = anymap::Map<dyn Any + Send + Sync>;
+
 pub use ruma_bot_macro::command_handler;
 
-/// An `async fn` annotated with `#[ruma_bot::command_handler]
+mod state;
+
+/// A function (usually `async`) annotated with `#[ruma_bot::command_handler]
 pub trait CommandHandler {
     /// The command(s) this function handles
     fn commands(&self) -> &'static [&'static str];
+
+    fn get_fn(&self) -> Box<dyn CommandHandlerFn>;
 }
 
-#[derive(Clone)]
+pub trait CommandHandlerFn: Send + Sync {
+    //fn
+}
+
 pub struct BotBuilder {
-    handlers: HashMap<&'static str, &'static dyn CommandHandler>,
+    handlers: HashMap<&'static str, Box<dyn CommandHandlerFn>>,
 }
 
 impl BotBuilder {
@@ -31,9 +41,9 @@ impl BotBuilder {
     }
 
     /// Register a command handler
-    pub fn register(mut self, handler: &'static dyn CommandHandler) -> Self {
+    pub fn register(mut self, handler: impl CommandHandler) -> Self {
         for command in handler.commands() {
-            let _old_value = self.handlers.insert(command, handler);
+            let _old_value = self.handlers.insert(command, handler.get_fn());
             // TODO: Log a warning if _old_value is Some
         }
 
@@ -43,16 +53,30 @@ impl BotBuilder {
     pub fn build(self) -> Bot {
         Bot {
             handlers: Arc::new(self.handlers),
+            state: AnyMap::new(),
         }
     }
 }
 
 pub struct Bot {
-    handlers: Arc<HashMap<&'static str, &'static dyn CommandHandler>>,
+    handlers: Arc<HashMap<&'static str, Box<dyn CommandHandlerFn>>>,
+    state: AnyMap,
 }
 
 impl Bot {
     pub async fn run(&self) -> Result<(), ()> {
         Ok(())
+    }
+}
+
+#[allow(dead_code)]
+mod compile_tests {
+    use super::Bot;
+
+    fn send_sync() {
+        fn assert_send<T: Send>() {}
+        fn assert_sync<T: Send>() {}
+        assert_send::<Bot>();
+        assert_sync::<Bot>();
     }
 }

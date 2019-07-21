@@ -31,6 +31,10 @@ pub fn command_handler(args: TokenStream, input: TokenStream) -> TokenStream {
             fn commands(&self) -> &'static [&'static str] {
                 &[#(#commands),*]
             }
+
+            fn get_fn(&self) -> Box<dyn ruma_bot::CommandHandlerFn> {
+                unimplemented!()
+            }
         }
     })
 }
