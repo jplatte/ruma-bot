@@ -71,7 +71,7 @@ impl Parse for Arg {
     }
 }
 
-pub struct Args(Vec<Arg>);
+pub struct Args(pub Vec<Arg>);
 
 impl Parse for Args {
     fn parse(input: ParseStream) -> syn::Result<Self> {

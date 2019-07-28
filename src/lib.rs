@@ -10,23 +10,25 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use anymap::any::Any;
+use anymap::any::CloneAny;
 use failure::{err_msg, Fallible};
 use futures::{Future, TryStreamExt};
 use js_int::UInt;
 use ruma_client::{api, HttpsClient as MatrixClient};
 use url::Url;
 
-type AnyMap = anymap::Map<dyn Any + Send + Sync>;
+// TODO: Get rid of compiler warnings, either by replacing CloneAny, or by fixing the issue upstream
+type AnyMap = anymap::Map<dyn CloneAny + Send + Sync>;
 type HandlerFnMap = HashMap<&'static str, Box<dyn CommandHandler>>;
 
 pub use ruma_bot_macro::command_handler;
 
-mod command_handler_fn;
 mod state;
+mod util;
 
+pub use state::State;
 #[doc(hidden)]
-pub use command_handler_fn::CommandHandlerFn;
+pub use util::{GetParam, HandlerParamMatcher};
 
 fn env_var(name: &'static str) -> Option<String> {
     std::env::var(name)
@@ -46,8 +48,8 @@ pub trait CommandHandler: Send + Sync {
         Self: Sized;
 
     /// Used to call the command handler with the necessary application state and command context
-    // TODO: Additional parameter(s) for command details
-    fn call(&mut self, bot: &Bot) -> Box<dyn Future<Output = Result<(), failure::Error>>>;
+    // TODO: Additional parameter(s) for command data
+    fn handle(&self, _: &Bot) -> Box<dyn Future<Output = Result<(), failure::Error>>>;
 }
 
 struct ConnectionDetails {

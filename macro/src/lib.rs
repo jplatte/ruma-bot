@@ -5,9 +5,9 @@ use std::mem;
 
 use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_macro_input, Ident, ItemFn};
+use syn::{parse_macro_input, Ident, ItemFn, LitStr};
 
-use args::Args;
+use args::{Arg, Args};
 
 mod args;
 
@@ -18,57 +18,53 @@ pub fn command_handler(args: TokenStream, input: TokenStream) -> TokenStream {
 
     assert!(
         handler_fn.decl.variadic.is_none(),
-        "ruma_bot handler functions are not allowed to be variadic",
+        "handler functions are not allowed to be variadic",
     );
 
     assert!(
         handler_fn.unsafety.is_none(),
-        "ruma_bot handler functions are not allowed to be `unsafe`",
+        "handler functions are not allowed to be `unsafe`",
     );
 
-    let infer_type = syn::Type::Infer(syn::TypeInfer {
-        underscore_token: Default::default(),
-    });
-    let fn_type = syn::TypeBareFn {
-        lifetimes: None,
-        unsafety: None,
-        abi: handler_fn.abi.clone(),
-        fn_token: Default::default(),
-        paren_token: Default::default(),
-        inputs: (0..handler_fn.decl.inputs.len())
-            .map(|_| syn::BareFnArg {
-                name: None,
-                ty: infer_type.clone(),
-            })
-            .collect(),
-        variadic: None,
-        output: syn::ReturnType::Type(Default::default(), Box::new(infer_type)),
-    };
+    let fn_ident = Ident::new(&format!("_{}_impl", handler_fn.ident), Span::call_site());
+    let ident = mem::replace(&mut handler_fn.ident, fn_ident.clone());
 
-    let ident = mem::replace(
-        &mut handler_fn.ident,
-        Ident::new("command_handler_impl", Span::call_site()),
-    );
-    // TODO
-    let commands = vec![ident.to_string()];
+    let get_calls = (0..handler_fn.decl.inputs.len()).map(|_| quote!(param_matcher.get()));
+
+    let mut commands = Vec::new();
+    for arg in macro_args.0 {
+        match arg {
+            Arg::Command(cmd_arg) => commands.push(cmd_arg),
+            Arg::Commands(cmd_args) => commands.extend(cmd_args),
+        }
+    }
+
+    // If no commands are given as arguments to this proc macro, use the function name as the
+    // command name
+    if commands.is_empty() {
+        commands.push(LitStr::new(&ident.to_string(), Span::call_site()));
+    }
 
     TokenStream::from(quote! {
         #[allow(non_camel_case_types)]
         #[derive(Clone, Copy)]
         struct #ident;
 
+        #handler_fn
+
         impl ruma_bot::CommandHandler for #ident {
             fn commands() -> &'static [&'static str] {
                 &[#(#commands),*]
             }
 
-            fn call(
-                &mut self,
+            fn handle(
+                &self,
                 bot: &ruma_bot::Bot,
             ) -> Box<dyn futures::Future<Output = Result<(), failure::Error>>> {
-                #handler_fn
+                use ruma_bot::GetParam;
+                let param_matcher = ruma_bot::HandlerParamMatcher { bot };
 
-                ruma_bot::CommandHandlerFn::call(command_handler_impl as #fn_type, bot)
+                Box::new(#fn_ident(#(#get_calls),*))
             }
         }
     })

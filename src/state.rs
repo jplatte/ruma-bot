@@ -3,7 +3,8 @@ use std::{
     ops::Deref,
 };
 
-struct State<T: Send + Sync> {
+#[derive(Clone, Copy)]
+pub struct State<T: Send + Sync> {
     inner: T,
 }
 
