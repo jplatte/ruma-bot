@@ -27,3 +27,14 @@ where
         &self.inner
     }
 }
+
+#[derive(Clone)]
+pub struct MsgContent(pub String);
+
+impl Deref for MsgContent {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}

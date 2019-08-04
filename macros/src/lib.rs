@@ -29,7 +29,8 @@ pub fn command_handler(args: TokenStream, input: TokenStream) -> TokenStream {
     let fn_ident = Ident::new(&format!("_{}_impl", handler_fn.ident), Span::call_site());
     let ident = mem::replace(&mut handler_fn.ident, fn_ident.clone());
 
-    let get_calls = (0..handler_fn.decl.inputs.len()).map(|_| quote!(param_matcher.get()));
+    // TODO: Error handling (required for State parameters)
+    let get_calls = (0..handler_fn.decl.inputs.len()).map(|_| quote!(param_matcher.get().unwrap()));
 
     let mut commands = Vec::new();
     for arg in macro_args.0 {
@@ -60,11 +61,18 @@ pub fn command_handler(args: TokenStream, input: TokenStream) -> TokenStream {
             fn handle(
                 &self,
                 bot: &ruma_bot::Bot,
-            ) -> Box<dyn futures::Future<Output = Result<(), failure::Error>>> {
+                msg_content: &str,
+            ) -> std::pin::Pin<Box<dyn futures::Future<Output = ()> + Send>> {
                 use ruma_bot::GetParam;
-                let param_matcher = ruma_bot::HandlerParamMatcher { bot };
+                let param_matcher = ruma_bot::HandlerParamMatcher { bot, msg_content };
+                let fut = #fn_ident(#(#get_calls),*);
 
-                Box::new(#fn_ident(#(#get_calls),*))
+                Box::pin(async move {
+                    let res = fut.await;
+                    if let Err(e) = res {
+                        eprintln!("{}", e);
+                    }
+                })
             }
         }
     })

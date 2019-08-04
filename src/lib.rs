@@ -6,14 +6,13 @@
 //! [matrix]: https://matrix.org/
 
 #![feature(async_await)]
-#![warn(missing_debug_implementations, missing_docs)]
+//#![warn(missing_debug_implementations, missing_docs)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use anymap::any::CloneAny;
 use failure::{err_msg, Fallible};
 use futures::{Future, TryStreamExt};
-use js_int::UInt;
 use ruma_client::{api, HttpsClient as MatrixClient};
 use url::Url;
 
@@ -23,12 +22,12 @@ type HandlerFnMap = HashMap<&'static str, Box<dyn CommandHandler>>;
 
 pub use ruma_bot_macros::command_handler;
 
-mod state;
 mod util;
+mod wrap;
 
-pub use state::State;
 #[doc(hidden)]
 pub use util::{GetParam, HandlerParamMatcher};
+pub use wrap::{MsgContent, State};
 
 fn env_var(name: &'static str) -> Option<String> {
     std::env::var(name)
@@ -48,10 +47,10 @@ pub trait CommandHandler: Send + Sync {
         Self: Sized;
 
     /// Used to call the command handler with the necessary application state and command context
-    // TODO: Additional parameter(s) for command data
-    fn handle(&self, _: &Bot) -> Box<dyn Future<Output = Result<(), failure::Error>>>;
+    fn handle(&self, _: &Bot, msg_content: &str) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
+#[derive(Clone)]
 struct ConnectionDetails {
     //homeserver_url: Url,
     username: String,
@@ -134,6 +133,7 @@ impl BotBuilder {
     }
 }
 
+#[derive(Clone)]
 pub struct Bot {
     client: MatrixClient,
     handlers: Arc<HandlerFnMap>,
@@ -143,93 +143,76 @@ pub struct Bot {
 
 impl Bot {
     pub async fn run(mut self) -> Result<(), ruma_client::Error> {
+        use api::r0::{
+            filter::{Filter, FilterDefinition, RoomEventFilter, RoomFilter},
+            sync::sync_events::Filter as SyncFilter,
+        };
+        use ruma_client::events::{
+            collections::all::RoomEvent,
+            room::message::{MessageEvent, MessageEventContent, TextMessageEventContent},
+        };
+
         // A Bot is always instantiated with connection_details = Some(...) and this method (that
         // can only be called once) is the only one method that uses connection_details. Thus, this
         // .unwrap() will never fail.
         let cd = self.connection_details.take().unwrap();
 
+        print!("logging in... ");
+
         self.client.log_in(cd.username, cd.password, None).await?;
 
-        use api::r0::{
-            filter::{Filter, FilterDefinition, RoomEventFilter, RoomFilter},
-            sync::sync_events::Filter as SyncFilter,
-        };
+        println!("done!");
 
         let mut sync0 = Box::pin(self.client.sync(
-            Some(SyncFilter::FilterDefinition(FilterDefinition {
-                event_fields: Vec::new(),
-                event_format: None,
-                account_data: Some(Filter {
-                    limit: Some(UInt::from(0u32)),
-                    //..Filter::default()
-                    senders: Vec::new(),
-                    not_senders: Vec::new(),
-                    types: Vec::new(),
-                    not_types: Vec::new(),
-                }),
-                room: Some(RoomFilter {
-                    account_data: Some(RoomEventFilter {
-                        limit: Some(UInt::from(0u32)),
-                        //..RoomEventFilter::default()
-                        rooms: Vec::new(),
-                        not_rooms: Vec::new(),
-                        senders: Vec::new(),
-                        not_senders: Vec::new(),
-                        types: Vec::new(),
-                        not_types: Vec::new(),
-                    }),
-                    timeline: Some(RoomEventFilter {
-                        limit: Some(UInt::from(0u32)),
-                        //..RoomEventFilter::default()
-                        rooms: Vec::new(),
-                        not_rooms: Vec::new(),
-                        senders: Vec::new(),
-                        not_senders: Vec::new(),
-                        types: Vec::new(),
-                        not_types: Vec::new(),
-                    }),
-                    ephemeral: Some(RoomEventFilter {
-                        limit: Some(UInt::from(0u32)),
-                        //..RoomEventFilter::default()
-                        rooms: Vec::new(),
-                        not_rooms: Vec::new(),
-                        senders: Vec::new(),
-                        not_senders: Vec::new(),
-                        types: Vec::new(),
-                        not_types: Vec::new(),
-                    }),
-                    state: Some(RoomEventFilter {
-                        limit: Some(UInt::from(0u32)),
-                        //..RoomEventFilter::default()
-                        rooms: Vec::new(),
-                        not_rooms: Vec::new(),
-                        senders: Vec::new(),
-                        not_senders: Vec::new(),
-                        types: Vec::new(),
-                        not_types: Vec::new(),
-                    }),
-                    //..RoomFilter::default()
-                    include_leave: None,
-                    rooms: Vec::new(),
-                    not_rooms: Vec::new(),
-                }),
-                presence: Some(Filter {
-                    limit: Some(UInt::from(0u32)),
-                    //..Filter::default()
-                    senders: Vec::new(),
-                    not_senders: Vec::new(),
-                    types: Vec::new(),
-                    not_types: Vec::new(),
-                }),
-            })),
+            Some(SyncFilter::FilterDefinition(FilterDefinition::ignore_all())),
             None,
             false,
         ));
 
         let sync_start = sync0.try_next().await?.expect("sync response").next_batch;
-        let mut sync_stream = Box::pin(self.client.sync(None, Some(sync_start), true));
+        let mut sync_stream = Box::pin(self.client.sync(
+            Some(SyncFilter::FilterDefinition(FilterDefinition {
+                account_data: Some(Filter::ignore_all()),
+                room: Some(RoomFilter {
+                    account_data: Some(RoomEventFilter::ignore_all()),
+                    ephemeral: Some(RoomEventFilter::ignore_all()),
+                    state: Some(RoomEventFilter::ignore_all()),
+                    ..Default::default()
+                }),
+                presence: Some(Filter::ignore_all()),
+                ..Default::default()
+            })),
+            Some(sync_start),
+            true,
+        ));
 
-        while let Some(res) = sync_stream.try_next().await? {}
+        println!("initial sync finished!");
+
+        while let Some(res) = sync_stream.try_next().await? {
+            for (room_id, room) in res.rooms.join {
+                for event in room.timeline.events {
+                    // Filter out the text messages
+                    if let RoomEvent::RoomMessage(MessageEvent {
+                        content: MessageEventContent::Text(TextMessageEventContent { body, .. }),
+                        sender,
+                        ..
+                    }) = event
+                    {
+                        println!("received message `{}`", body);
+
+                        if body.starts_with('!') {
+                            if let Some(idx) = body.find(char::is_whitespace) {
+                                let command = &body[1..idx];
+
+                                if let Some(handler) = self.handlers.get(command) {
+                                    tokio::spawn(handler.handle(&self, &body[idx + 1..]));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
