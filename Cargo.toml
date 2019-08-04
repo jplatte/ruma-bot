@@ -21,4 +21,4 @@ path = "macros"
 git = "https://github.com/tokio-rs/tokio"
 
 [workspace]
-members = ["macro"]
+members = ["macros"]
