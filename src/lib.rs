@@ -21,7 +21,7 @@ use url::Url;
 type AnyMap = anymap::Map<dyn CloneAny + Send + Sync>;
 type HandlerFnMap = HashMap<&'static str, Box<dyn CommandHandler>>;
 
-pub use ruma_bot_macro::command_handler;
+pub use ruma_bot_macros::command_handler;
 
 mod state;
 mod util;
