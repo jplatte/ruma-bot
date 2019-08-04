@@ -1,5 +1,5 @@
 [package]
-name = "ruma-bot-macro"
+name = "ruma-bot-macros"
 version = "0.1.0"
 authors = ["Jonas Platte <jplatte+git@posteo.de>"]
 edition = "2018"
@@ -12,5 +12,5 @@ proc-macro2 = "0.4.30"
 quote = "0.6.13"
 
 [dependencies.syn]
-version = "0.15.40"
+version = "0.15.42"
 features = ["full", "extra-traits"]

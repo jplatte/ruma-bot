@@ -14,8 +14,8 @@ hyper-tls = { git = "https://github.com/hyperium/hyper-tls" }
 ruma-client = { path = "../ruma-client" }
 url = "2.0.0"
 
-[dependencies.ruma-bot-macro]
-path = "macro"
+[dependencies.ruma-bot-macros]
+path = "macros"
 
 [dev-dependencies.tokio]
 git = "https://github.com/tokio-rs/tokio"
