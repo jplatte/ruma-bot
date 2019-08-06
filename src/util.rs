@@ -1,7 +1,10 @@
+// This module is not public, and all exports from it are #[doc(hidden)], so the docs wouldn't be
+// visible anyway.
+#![allow(missing_docs)]
+
 use crate::{Bot, MsgContent, State};
 
-// Currently, GetParam could also be implemented direclty on &'a Bot, but in the future,
-// event-specific data will be added to this struct.
+#[derive(Debug)]
 pub struct HandlerParamMatcher<'a> {
     pub bot: &'a Bot,
     pub msg_content: &'a str,

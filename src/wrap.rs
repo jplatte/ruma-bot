@@ -1,21 +1,7 @@
-use std::{
-    fmt::{self, Debug},
-    ops::Deref,
-};
+use std::ops::Deref;
 
 #[derive(Clone, Copy)]
-pub struct State<T: Send + Sync> {
-    inner: T,
-}
-
-impl<T> Debug for State<T>
-where
-    T: Debug + Send + Sync,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.inner)
-    }
-}
+pub struct State<T: Send + Sync>(pub(crate) T);
 
 impl<T> Deref for State<T>
 where
@@ -24,7 +10,7 @@ where
     type Target = T;
 
     fn deref(&self) -> &T {
-        &self.inner
+        &self.0
     }
 }
 

@@ -6,7 +6,7 @@
 //! [matrix]: https://matrix.org/
 
 #![feature(async_await)]
-//#![warn(missing_debug_implementations, missing_docs)]
+#![warn(missing_debug_implementations, missing_docs)]
 
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 
@@ -22,6 +22,7 @@ type HandlerFnMap = HashMap<&'static str, Box<dyn CommandHandler>>;
 
 pub use ruma_bot_macros::command_handler;
 
+mod debug;
 mod util;
 mod wrap;
 
@@ -50,13 +51,14 @@ pub trait CommandHandler: Send + Sync {
     fn handle(&self, _: &Bot, msg_content: &str) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct ConnectionDetails {
     //homeserver_url: Url,
     username: String,
     password: String,
 }
 
+/// A builder that the `Bot` type
 pub struct BotBuilder {
     handlers: HandlerFnMap,
     homeserver_url: Option<Url>,
@@ -65,6 +67,7 @@ pub struct BotBuilder {
 }
 
 impl BotBuilder {
+    /// Crate a new `BotBuilder`
     pub fn new() -> Self {
         Self {
             handlers: HashMap::new(),
@@ -91,21 +94,34 @@ impl BotBuilder {
         self
     }
 
+    /// Set the homeserver url (must be an `https` url currently)
+    ///
+    /// If the homeserver url is not set with this method, `build` will fall back to the environment
+    /// variable `RUMA_BOT_HOMESERVER_URL`.
     pub fn homeserver_url(mut self, homeserver_url: Url) -> Self {
         self.homeserver_url = Some(homeserver_url);
         self
     }
 
+    /// Set the username
+    ///
+    /// If the username is not set with this method, `build` will fall back to the environment
+    /// variable `RUMA_BOT_USERNAME`.
     pub fn username(mut self, username: String) -> Self {
         self.username = Some(username);
         self
     }
 
+    /// Set the password
+    ///
+    /// If the password is not set with this method, ,`build` will fall back to the environment
+    /// variable `RUMA_BOT_PASSWORD`.
     pub fn password(mut self, password: String) -> Self {
         self.password = Some(password);
         self
     }
 
+    /// Build the bot
     pub fn build(self) -> Fallible<Bot> {
         Ok(Bot {
             client: MatrixClient::https(
@@ -133,6 +149,8 @@ impl BotBuilder {
     }
 }
 
+/// A bot, usually containing one or more command handlers and optionally a reaction handler,
+/// which can also manage arbitrary application data (one instance per type).
 #[derive(Clone)]
 pub struct Bot {
     client: MatrixClient,
@@ -142,6 +160,7 @@ pub struct Bot {
 }
 
 impl Bot {
+    /// Start the Bot's main loop
     pub async fn run(mut self) -> Result<(), ruma_client::Error> {
         use api::r0::{
             filter::{Filter, FilterDefinition, RoomEventFilter, RoomFilter},
@@ -157,11 +176,7 @@ impl Bot {
         // .unwrap() will never fail.
         let cd = self.connection_details.take().unwrap();
 
-        print!("logging in... ");
-
         self.client.log_in(cd.username, cd.password, None).await?;
-
-        println!("done!");
 
         let mut sync0 = Box::pin(self.client.sync(
             Some(SyncFilter::FilterDefinition(FilterDefinition::ignore_all())),
@@ -175,7 +190,6 @@ impl Bot {
                 account_data: Some(Filter::ignore_all()),
                 room: Some(RoomFilter {
                     account_data: Some(RoomEventFilter::ignore_all()),
-                    ephemeral: Some(RoomEventFilter::ignore_all()),
                     state: Some(RoomEventFilter::ignore_all()),
                     ..Default::default()
                 }),
@@ -186,20 +200,16 @@ impl Bot {
             true,
         ));
 
-        println!("initial sync finished!");
-
         while let Some(res) = sync_stream.try_next().await? {
-            for (room_id, room) in res.rooms.join {
+            for (_room_id, room) in res.rooms.join {
                 for event in room.timeline.events {
                     // Filter out the text messages
                     if let RoomEvent::RoomMessage(MessageEvent {
                         content: MessageEventContent::Text(TextMessageEventContent { body, .. }),
-                        sender,
+                        sender: _sender,
                         ..
                     }) = event
                     {
-                        println!("received message `{}`", body);
-
                         if body.starts_with('!') {
                             if let Some(idx) = body.find(char::is_whitespace) {
                                 let command = &body[1..idx];
