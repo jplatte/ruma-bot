@@ -11,7 +11,7 @@ use ruma_bot::{command_handler, Bot, BotBuilder, MsgContent, State};
 type AppState = Arc<Mutex<HashMap<String, String>>>;
 
 #[command_handler]
-async fn help(bot: Bot, msg_content: MsgContent) -> Fallible<()> {
+async fn help(bot: Bot, msg_content: MsgContent, state: State<AppState>) -> Fallible<()> {
     println!("help called!");
 
     Ok(())
@@ -22,15 +22,15 @@ async fn help(bot: Bot, msg_content: MsgContent) -> Fallible<()> {
 //    Ok(())
 //}
 
-//#[command_handler(command = "fetch {id}")]
-//#[command_handler(command = regex("a(B|CD) (\w+)"))]
-
 //#[reaction_handler]
+//async fn handle_reaction(state: State<AppState>) -> Fallible<()> {
+//    Ok(())
+//}
 
 #[tokio::main]
 async fn main() {
     let bot = BotBuilder::new()
-        //.state(Arc::new(Mutex::new(HashMap::<String, String>::new())))
+        .state(Arc::new(Mutex::new(HashMap::<String, String>::new())))
         .register(help)
         .build()
         .unwrap();

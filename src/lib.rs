@@ -58,9 +58,10 @@ struct ConnectionDetails {
     password: String,
 }
 
-/// A builder that the `Bot` type
+/// A builder for the `Bot` type
 pub struct BotBuilder {
     handlers: HandlerFnMap,
+    state: AnyMap,
     homeserver_url: Option<Url>,
     username: Option<String>,
     password: Option<String>,
@@ -71,6 +72,7 @@ impl BotBuilder {
     pub fn new() -> Self {
         Self {
             handlers: HashMap::new(),
+            state: AnyMap::new(),
             homeserver_url: None,
             username: None,
             password: None,
@@ -91,6 +93,15 @@ impl BotBuilder {
             );
         }
 
+        self
+    }
+
+    /// Register some state to be used across calls to event handlers
+    pub fn state<T>(mut self, initial_value: T) -> Self
+    where
+        T: CloneAny + Send + Sync,
+    {
+        self.state.insert(initial_value);
         self
     }
 
@@ -134,7 +145,7 @@ impl BotBuilder {
                 None,
             )?,
             handlers: Arc::new(self.handlers),
-            state: AnyMap::new(),
+            state: self.state,
             connection_details: Some(ConnectionDetails {
                 username: self
                     .username
