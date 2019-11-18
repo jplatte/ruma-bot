@@ -1,5 +1,3 @@
-#![feature(async_await)]
-
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},

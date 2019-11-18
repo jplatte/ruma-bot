@@ -5,7 +5,6 @@
 //!
 //! [matrix]: https://matrix.org/
 
-#![feature(async_await)]
 #![warn(missing_debug_implementations, missing_docs)]
 
 use std::{collections::HashMap, pin::Pin, sync::Arc};
@@ -69,6 +68,7 @@ pub struct BotBuilder {
 
 impl BotBuilder {
     /// Crate a new `BotBuilder`
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             handlers: HashMap::new(),
@@ -141,7 +141,7 @@ impl BotBuilder {
                         env_var("RUMA_BOT_HOMESERVER_URL")
                             .map(|s| s.parse().expect("valid url for RUMA_BOT_HOMESERVER_URL"))
                     })
-                    .ok_or(err_msg("ruma_bot: homeserver_url not configured"))?,
+                    .ok_or_else(|| err_msg("ruma_bot: homeserver_url not configured"))?,
                 None,
             )?,
             handlers: Arc::new(self.handlers),
@@ -150,11 +150,11 @@ impl BotBuilder {
                 username: self
                     .username
                     .or_else(|| env_var("RUMA_BOT_USERNAME"))
-                    .ok_or(err_msg("ruma_bot: username not configured"))?,
+                    .ok_or_else(|| err_msg("ruma_bot: username not configured"))?,
                 password: self
                     .password
                     .or_else(|| env_var("RUMA_BOT_PASSWORD"))
-                    .ok_or(err_msg("ruma_bot: password not configured"))?,
+                    .ok_or_else(|| err_msg("ruma_bot: password not configured"))?,
             }),
         })
     }
@@ -213,7 +213,13 @@ impl Bot {
 
         while let Some(res) = sync_stream.try_next().await? {
             for (_room_id, room) in res.rooms.join {
-                for event in room.timeline.events {
+                for event in room
+                    .timeline
+                    .events
+                    .into_iter()
+                    // ignore invalid events
+                    .flat_map(|ev_res| ev_res.into_result())
+                {
                     // Filter out the text messages
                     if let RoomEvent::RoomMessage(MessageEvent {
                         content: MessageEventContent::Text(TextMessageEventContent { body, .. }),
@@ -232,6 +238,10 @@ impl Bot {
                         }
                     }
                 }
+            }
+
+            for (_room_id, _invited_room) in res.rooms.invite {
+                // TODO
             }
         }
 

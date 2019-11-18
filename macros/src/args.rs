@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::{Pair, Punctuated},
-    spanned::Spanned,
     Expr, ExprArray, ExprLit, Ident, Lit, LitStr, Token,
 };
 
@@ -31,8 +30,8 @@ impl Parse for Arg {
                     let array: ExprArray = input.parse()?;
 
                     if !array.attrs.is_empty() {
-                        return Err(syn::Error::new(
-                            array.attrs[0].tts.span(),
+                        return Err(syn::Error::new_spanned(
+                            &array.attrs[0],
                             "attributes are not allowed here",
                         ));
                     }
@@ -44,8 +43,8 @@ impl Parse for Arg {
                         .map(|expr| {
                             if let Expr::Lit(ExprLit { attrs, lit }) = expr {
                                 if !attrs.is_empty() {
-                                    return Err(syn::Error::new(
-                                        attrs[0].tts.span(),
+                                    return Err(syn::Error::new_spanned(
+                                        &attrs[0],
                                         "attributes are not allowed here",
                                     ));
                                 }
@@ -53,10 +52,10 @@ impl Parse for Arg {
                                 if let Lit::Str(s) = lit {
                                     Ok(s)
                                 } else {
-                                    Err(syn::Error::new(lit.span(), "expected string literal"))
+                                    Err(syn::Error::new_spanned(lit, "expected string literal"))
                                 }
                             } else {
-                                Err(syn::Error::new(expr.span(), "expected string literal"))
+                                Err(syn::Error::new_spanned(expr, "expected string literal"))
                             }
                         })
                         .collect::<Result<_, _>>()?;
@@ -66,7 +65,7 @@ impl Parse for Arg {
                     Err(input.error("expected `=`"))
                 }
             }
-            _ => Err(syn::Error::new(ident.span(), "unknown ruma_bot option")),
+            _ => Err(syn::Error::new_spanned(ident, "unknown ruma_bot option")),
         }
     }
 }
