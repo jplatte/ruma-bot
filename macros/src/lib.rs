@@ -16,20 +16,10 @@ pub fn command_handler(args: TokenStream, input: TokenStream) -> TokenStream {
     let mut handler_fn = parse_macro_input!(input as ItemFn);
     let macro_args = parse_macro_input!(args as Args);
 
-    assert!(
-        handler_fn.sig.variadic.is_none(),
-        "handler functions are not allowed to be variadic",
-    );
+    assert!(handler_fn.sig.variadic.is_none(), "handler functions are not allowed to be variadic",);
+    assert!(handler_fn.sig.unsafety.is_none(), "handler functions are not allowed to be `unsafe`",);
 
-    assert!(
-        handler_fn.sig.unsafety.is_none(),
-        "handler functions are not allowed to be `unsafe`",
-    );
-
-    let fn_ident = Ident::new(
-        &format!("_{}_impl", handler_fn.sig.ident),
-        Span::call_site(),
-    );
+    let fn_ident = Ident::new(&format!("_{}_impl", handler_fn.sig.ident), Span::call_site());
     let ident = mem::replace(&mut handler_fn.sig.ident, fn_ident.clone());
 
     // TODO: Error handling (required for State parameters)

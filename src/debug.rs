@@ -14,9 +14,7 @@ struct HandlerFnMapDbg<'a>(&'a HandlerFnMap);
 
 impl<'a> fmt::Debug for HandlerFnMapDbg<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_map()
-            .entries(self.0.iter().map(|(k, _)| (k, Placeholder)))
-            .finish()
+        f.debug_map().entries(self.0.iter().map(|(k, _)| (k, Placeholder))).finish()
     }
 }
 
